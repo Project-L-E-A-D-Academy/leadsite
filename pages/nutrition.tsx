@@ -13,7 +13,7 @@ export default function NutritionPage() {
       if (error || !data.user) {
         router.push('/auth?redirect=/nutrition') // Not logged in, redirect to login
       } else {
-        setUserEmail(data.user.email)
+        setUserEmail(data?.user?.email ?? null)
       }
     })
   }, [router])
