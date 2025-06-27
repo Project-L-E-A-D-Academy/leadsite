@@ -12,7 +12,7 @@ export default function MindfulnessPage() {
       if (error || !data.session) {
         router.push('/auth?redirect=/mindfulness')
       } else {
-        setUserEmail(data.session.user.email)
+        setUserEmail(data.session?.user?.email ?? null)
       }
     }
 
