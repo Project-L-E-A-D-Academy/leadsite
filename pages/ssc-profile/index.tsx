@@ -17,8 +17,8 @@ export default function SSCProfile() {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        setUserEmail(user.email)
-        setUserId(user.id)
+        setUserEmail(user.email ?? null)
+        setUserId(user.id ?? null)
       } else {
         alert('Please log in to access this page.')
         window.location.href = '/auth'
@@ -59,16 +59,14 @@ export default function SSCProfile() {
       .getPublicUrl(filePath)
 
     if (publicUrlData.publicUrl && userEmail && userId) {
-      const { error: insertError } = await supabase.from('ssc_profiles').insert([
-        {
-          user_id: userId,
-          email: userEmail,
-          role: role || 'President',
-          description,
-          profile_url: publicUrlData.publicUrl,
-          team: creatingTeam ? `${userEmail}'s Team` : null
-        }
-      ])
+      const { error: insertError } = await supabase.from('ssc_profiles').insert([{
+        user_id: userId,
+        email: userEmail,
+        role: role || 'President',
+        description,
+        profile_url: publicUrlData.publicUrl,
+        team: creatingTeam ? `${userEmail}'s Team` : null
+      }])
 
       if (insertError) {
         console.error('DB insert error:', insertError.message)
@@ -109,29 +107,17 @@ export default function SSCProfile() {
       <h1 className="text-3xl font-bold mb-4 text-center text-red-600">SSC Profile Setup</h1>
 
       <div className="bg-white shadow-md rounded-xl p-6 w-full max-w-md space-y-6">
-        {/* Image Upload Preview */}
         <div className="flex flex-col items-center">
           <label htmlFor="profileImage" className="relative w-40 h-40 rounded-full overflow-hidden border-4 border-red-500 flex items-center justify-center bg-gray-200 cursor-pointer text-center">
             {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt="Preview"
-                className="w-full h-full object-cover"
-              />
+              <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
             ) : (
               <span className="text-gray-500 font-medium text-sm px-2 text-center">Click here for your PROFILE</span>
             )}
-            <input
-              id="profileImage"
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="hidden"
-            />
+            <input id="profileImage" type="file" accept="image/*" onChange={handleImageChange} className="hidden" />
           </label>
         </div>
 
-        {/* Description */}
         <div>
           <label className="block font-semibold text-gray-700 mb-1">
             About you {role ? `to this ${role}` : ''}
@@ -145,7 +131,6 @@ export default function SSCProfile() {
           />
         </div>
 
-        {/* Role Selection */}
         <div>
           <label className="block font-semibold text-gray-700 mb-1">Select Role</label>
           <select
@@ -166,12 +151,10 @@ export default function SSCProfile() {
           </select>
         </div>
 
-        {/* Create Team */}
         <div className="bg-gray-200 p-3 rounded-lg cursor-pointer text-center font-semibold" onClick={handleCreateTeam}>
           Create Council Team?
         </div>
 
-        {/* Upload Button */}
         <button
           onClick={handleUpload}
           className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-lg transition"
@@ -180,7 +163,6 @@ export default function SSCProfile() {
         </button>
       </div>
 
-      {/* Confirmation Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-lg max-w-sm w-full">
