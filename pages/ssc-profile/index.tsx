@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
+import Image from 'next/image'
 
 export default function SSCProfile() {
   const [imageUrl, setImageUrl] = useState<string>('')
@@ -40,6 +41,23 @@ export default function SSCProfile() {
       return
     }
 
+    if (!userEmail || !userId) {
+      alert('User not authenticated.')
+      return
+    }
+
+    // Check if profile already exists
+    const { data: existing, error: fetchError } = await supabase
+      .from('ssc_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    if (existing) {
+      alert('You already have a profile.')
+      return
+    }
+
     const fileExt = file.name.split('.').pop()
     const fileName = `${Date.now()}.${fileExt}`
     const filePath = `uploads/${fileName}`
@@ -57,26 +75,26 @@ export default function SSCProfile() {
       .from('profiles-pictures')
       .getPublicUrl(filePath)
 
-    if (publicUrlData.publicUrl && userEmail && userId) {
-      const { error: insertError } = await supabase.from('ssc_profiles').insert([
-        {
-          user_id: userId,
-          email: userEmail,
-          role: role || 'President',
-          description,
-          profile_url: publicUrlData.publicUrl,
-          team: creatingTeam ? `${userEmail}'s Team` : null
-        }
-      ])
+    const profileUrl = publicUrlData?.publicUrl ?? ''
 
-      if (insertError) {
-        console.error('DB insert error:', insertError.message)
-        return alert('Saving profile failed.')
+    const { error: insertError } = await supabase.from('ssc_profiles').insert([
+      {
+        user_id: userId,
+        email: userEmail,
+        role: role || 'President',
+        description,
+        profile_url: profileUrl,
+        team: creatingTeam ? `${userEmail}'s Team` : null
       }
+    ])
 
-      alert('Profile image uploaded and saved successfully!')
-      window.location.href = '/ssc-voting'
+    if (insertError) {
+      console.error('DB insert error:', insertError.message)
+      return alert('Saving profile failed.')
     }
+
+    alert('Profile created successfully!')
+    window.location.href = '/ssc-voting'
   }
 
   const handleRoleSelect = (selectedRole: string) => {
@@ -112,10 +130,11 @@ export default function SSCProfile() {
         <div className="flex flex-col items-center">
           <label htmlFor="profileImage" className="relative w-40 h-40 rounded-full overflow-hidden border-4 border-red-500 flex items-center justify-center bg-gray-200 cursor-pointer text-center">
             {imageUrl ? (
-              <img
+              <Image
                 src={imageUrl}
                 alt="Preview"
-                className="w-full h-full object-cover"
+                layout="fill"
+                objectFit="cover"
               />
             ) : (
               <span className="text-gray-500 font-medium text-sm px-2 text-center">Click here for your PROFILE</span>
