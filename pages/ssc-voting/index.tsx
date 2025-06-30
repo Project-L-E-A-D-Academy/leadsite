@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/router'
+import Image from 'next/image'
+
+interface SSCProfile {
+  user_id: string
+  email: string
+  role: string
+  description: string
+  profile_url: string
+  team: string | null
+}
 
 export default function SSCVoting() {
-  const [profile, setProfile] = useState<any>(null)
+  const [profile, setProfile] = useState<SSCProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [vote, setVote] = useState('')
   const router = useRouter()
@@ -36,7 +46,7 @@ export default function SSCVoting() {
     }
 
     getProfile()
-  }, [])
+  }, [router]) // ✅ include router as dependency
 
   const handleVote = async () => {
     if (!vote) return alert('Please select a candidate.')
@@ -67,13 +77,15 @@ export default function SSCVoting() {
         <div>
           <h1 className="text-2xl font-bold text-red-600">SSC Voting</h1>
           <p className="text-gray-600">Welcome, {profile.description}</p>
-          <p className="text-sm text-gray-500">Role: {profile.role} | Team: {profile.team_name || 'None'}</p>
+          <p className="text-sm text-gray-500">Role: {profile.role} | Team: {profile.team || 'None'}</p>
         </div>
-        {profile.image_url && (
-          <img
-            src={profile.image_url}
+        {profile.profile_url && (
+          <Image
+            src={profile.profile_url}
             alt="Profile"
-            className="w-14 h-14 rounded-full object-cover border-2 border-red-500"
+            width={56}
+            height={56}
+            className="rounded-full object-cover border-2 border-red-500"
           />
         )}
       </div>
