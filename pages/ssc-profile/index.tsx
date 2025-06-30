@@ -47,7 +47,7 @@ export default function SSCProfile() {
     }
 
     // Check if profile already exists
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existing } = await supabase
       .from('ssc_profiles')
       .select('*')
       .eq('user_id', userId)
