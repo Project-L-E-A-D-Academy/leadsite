@@ -1,239 +1,163 @@
-import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
-import Image from 'next/image'
+import { useState, useEffect } from "react";
+import { useRouter } from "next/router";
+import { supabase } from "@/utils/supabaseClient"; // adjust path as needed
 
 export default function SSCProfile() {
-  const [imageUrl, setImageUrl] = useState<string>('')
-  const [file, setFile] = useState<File | null>(null)
-  const [description, setDescription] = useState<string>('')
-  const [role, setRole] = useState<string>('')
-  const [showModal, setShowModal] = useState(false)
-  const [confirmText, setConfirmText] = useState('')
-  const [creatingTeam, setCreatingTeam] = useState(false)
-  const [userEmail, setUserEmail] = useState<string | null>(null)
-  const [userId, setUserId] = useState<string | null>(null)
+  const router = useRouter();
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // Fields
+  const [fullName, setFullName] = useState("");
+  const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
+  const [role, setRole] = useState("");
+  const [about, setAbout] = useState("");
+  const [error, setError] = useState("");
+
+  // Check session and profile
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setUserEmail(user.email ?? null)
-        setUserId(user.id ?? null)
-      } else {
-        alert('Please log in to access this page.')
-        window.location.href = '/auth'
+    async function getSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push("/login"); // redirect if not logged in
+        return;
       }
-    }
-    getUser()
-  }, [])
+      setUser(session.user);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0]
-    if (selected) {
-      setFile(selected)
-      setImageUrl(URL.createObjectURL(selected))
-    }
-  }
-
-  const handleUpload = async () => {
-    if (!file || !description || (!role && !creatingTeam)) {
-      alert('Please complete all fields before continuing.')
-      return
-    }
-
-    if (!userEmail || !userId) {
-      alert('User not authenticated.')
-      return
-    }
-
-    // Check if profile already exists
-    const { data: existing } = await supabase
-      .from('ssc_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .single()
-
-    if (existing) {
-      alert('You already have a profile.')
-      return
-    }
-
-    const fileExt = file.name.split('.').pop()
-    const fileName = `${Date.now()}.${fileExt}`
-    const filePath = `uploads/${fileName}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('profiles-pictures')
-      .upload(filePath, file)
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError.message)
-      return alert('Upload failed.')
-    }
-
-    const { data: publicUrlData } = supabase.storage
-      .from('profiles-pictures')
-      .getPublicUrl(filePath)
-
-    const profileUrl = publicUrlData?.publicUrl ?? ''
-
-    const { error: insertError } = await supabase.from('ssc_profiles').insert([
-      {
-        user_id: userId,
-        email: userEmail,
-        role: role || 'President',
-        description,
-        profile_url: profileUrl,
-        team: creatingTeam ? `${userEmail}'s Team` : null
+      // Check existing profile
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .single();
+      if (profile) {
+        // Already registered, route to voting
+        router.push("/ssc-voting");
       }
-    ])
+      setLoading(false);
+    }
+    getSession();
+  }, []);
 
-    if (insertError) {
-      console.error('DB insert error:', insertError.message)
-      return alert('Saving profile failed.')
+  // Handle photo upload
+  async function uploadPhoto(file: File) {
+    const fileExt = file.name.split(".").pop();
+    const filePath = `${user.id}/profile.${fileExt}`;
+    let { error } = await supabase.storage
+      .from("profile-photos")
+      .upload(filePath, file, { upsert: true });
+    if (error) throw error;
+    const { data } = supabase.storage.from("profile-photos").getPublicUrl(filePath);
+    return data.publicUrl;
+  }
+
+  const validateFullName = (name: string) =>
+    name.trim().split(" ").length >= 2 && !/[^a-zA-Z\s\-]/.test(name);
+
+  async function handleSubmit(e: any) {
+    e.preventDefault();
+    setError("");
+    if (!validateFullName(fullName)) {
+      setError("Please enter your full legal name (first and last, no nicknames).");
+      return;
+    }
+    if (!profilePhoto) {
+      setError("Profile photo is required.");
+      return;
+    }
+    if (!role) {
+      setError("Role is required.");
+      return;
+    }
+    if (!about) {
+      setError("The 'About you as a " + role + "' field is required.");
+      return;
     }
 
-    alert('Profile created successfully!')
-    window.location.href = '/ssc-voting'
-  }
+    setLoading(true);
 
-  const handleRoleSelect = (selectedRole: string) => {
-    if (selectedRole === 'President') return
-    setRole(selectedRole)
-    setShowModal(true)
-  }
-
-  const handleConfirmModal = () => {
-    setShowModal(false)
-  }
-
-  const handleCreateTeam = () => {
-    setCreatingTeam(true)
-    setShowModal(true)
-  }
-
-  const handleConfirmPresident = () => {
-    if (confirmText === 'PRESIDENT') {
-      setRole('President')
-      setShowModal(false)
-    } else {
-      alert('You must type PRESIDENT exactly to confirm.')
+    let photoUrl = "";
+    try {
+      photoUrl = await uploadPhoto(profilePhoto);
+    } catch (err) {
+      setError("Photo upload failed.");
+      setLoading(false);
+      return;
     }
+
+    const { error: upsertError } = await supabase.from("profiles").upsert({
+      user_id: user.id,
+      full_name: fullName,
+      profile_photo: photoUrl,
+      role,
+      about,
+    });
+    if (upsertError) {
+      setError("Failed to save profile: " + upsertError.message);
+      setLoading(false);
+      return;
+    }
+    router.push("/ssc-voting");
   }
+
+  if (loading) return <div>Loading...</div>;
 
   return (
-    <main className="min-h-screen bg-gray-50 p-6 flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-4 text-center text-red-600">SSC Profile Setup</h1>
+    <div className="max-w-md mx-auto p-8 bg-white shadow rounded-lg">
+      <h1 className="text-2xl font-bold mb-4">SSC Profile Registration</h1>
+      {error && <div className="text-red-600 mb-2">{error}</div>}
+      <form onSubmit={handleSubmit}>
+        <label className="block mb-2">Full Name (no nicknames, first & last):</label>
+        <input
+          type="text"
+          className="border p-2 w-full mb-4"
+          value={fullName}
+          onChange={e => setFullName(e.target.value)}
+          required
+        />
 
-      <div className="bg-white shadow-md rounded-xl p-6 w-full max-w-md space-y-6">
-        {/* Image Upload Preview */}
-        <div className="flex flex-col items-center">
-          <label htmlFor="profileImage" className="relative w-40 h-40 rounded-full overflow-hidden border-4 border-red-500 flex items-center justify-center bg-gray-200 cursor-pointer text-center">
-            {imageUrl ? (
-              <Image
-                src={imageUrl}
-                alt="Preview"
-                layout="fill"
-                objectFit="cover"
-              />
-            ) : (
-              <span className="text-gray-500 font-medium text-sm px-2 text-center">Click here for your PROFILE</span>
-            )}
-            <input
-              id="profileImage"
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-              className="hidden"
-            />
-          </label>
-        </div>
+        <label className="block mb-2">Profile Photo:</label>
+        <input
+          type="file"
+          accept="image/*"
+          className="mb-4"
+          onChange={e => setProfilePhoto(e.target.files?.[0] || null)}
+          required
+        />
 
-        {/* Description */}
-        <div>
-          <label className="block font-semibold text-gray-700 mb-1">
-            About you {role ? `to this ${role}` : ''}
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Write a short description..."
-            className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-            rows={4}
-          />
-        </div>
-
-        {/* Role Selection */}
-        <div>
-          <label className="block font-semibold text-gray-700 mb-1">Select Role</label>
-          <select
-            value={role}
-            onChange={(e) => handleRoleSelect(e.target.value)}
-            className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-          >
-            <option value="">-- Select a Role --</option>
-            <option value="Vice President">Vice President</option>
-            <option value="Secretary">Secretary</option>
-            <option value="Sub Secretary">Sub Secretary</option>
-            <option value="Treasurer">Treasurer</option>
-            <option value="Sub Treasurer">Sub Treasurer</option>
-            <option value="Auditor">Auditor</option>
-            <option value="PIO">PIO (Peace Officer)</option>
-            <option value="Business Manager">Business Manager</option>
-            <option value="Sergeant at Arms">Sergeant at Arms</option>
-          </select>
-        </div>
-
-        {/* Create Team */}
-        <div className="bg-gray-200 p-3 rounded-lg cursor-pointer text-center font-semibold" onClick={handleCreateTeam}>
-          Create Council Team?
-        </div>
-
-        {/* Upload Button */}
-        <button
-          onClick={handleUpload}
-          className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-3 rounded-lg transition"
+        <label className="block mb-2">Role:</label>
+        <select
+          className="border p-2 w-full mb-4"
+          value={role}
+          onChange={e => setRole(e.target.value)}
+          required
         >
-          Upload & Continue
-        </button>
-      </div>
+          <option value="">Select role</option>
+          <option value="president">President</option>
+          <option value="vice-president">Vice President</option>
+          <option value="secretary">Secretary</option>
+          <option value="treasurer">Treasurer</option>
+          {/* Add other roles as needed */}
+        </select>
 
-      {/* Confirmation Modal */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-lg max-w-sm w-full">
-            {creatingTeam ? (
-              <>
-                <h2 className="text-xl font-bold text-red-600 mb-4">Confirm Leadership</h2>
-                <p className="mb-4">You are creating a council team. This action is irreversible and you will become the PRESIDENT. Type <strong>PRESIDENT</strong> to confirm.</p>
-                <input
-                  type="text"
-                  value={confirmText}
-                  onChange={(e) => setConfirmText(e.target.value)}
-                  className="w-full p-2 border rounded mb-4"
-                />
-                <button
-                  onClick={handleConfirmPresident}
-                  className="w-full bg-red-500 text-white py-2 rounded-lg"
-                >
-                  Confirm
-                </button>
-              </>
-            ) : (
-              <>
-                <h2 className="text-xl font-bold text-red-600 mb-4">Confirm Role</h2>
-                <p className="mb-4">You have selected the role of <strong>{role}</strong>. This cannot be changed later. Are you sure?</p>
-                <button
-                  onClick={handleConfirmModal}
-                  className="w-full bg-red-500 text-white py-2 rounded-lg"
-                >
-                  Yes, I’m Sure
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </main>
-  )
+        <label className="block mb-2">
+          About you as a {role || "[role]"}:
+        </label>
+        <textarea
+          className="border p-2 w-full mb-4"
+          value={about}
+          onChange={e => setAbout(e.target.value)}
+          required
+        />
+
+        <button
+          className="bg-red-700 text-white py-2 px-4 rounded hover:bg-red-800"
+          type="submit"
+          disabled={loading}
+        >
+          Save Profile
+        </button>
+      </form>
+    </div>
+  );
 }
