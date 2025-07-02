@@ -1,15 +1,11 @@
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/utils/supabaseClient";
-
-interface SupabaseUser {
-  id: string;
-  [key: string]: unknown;
-}
+import type { User } from "@supabase/supabase-js";
 
 export default function SSCProfile() {
   const router = useRouter();
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [fullName, setFullName] = useState("");
@@ -25,7 +21,7 @@ export default function SSCProfile() {
         router.push("/login");
         return;
       }
-      setUser(session.user as SupabaseUser);
+      setUser(session.user);
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
