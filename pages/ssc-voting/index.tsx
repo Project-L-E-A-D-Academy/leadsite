@@ -1,13 +1,45 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, FormEvent } from "react";
 import { useRouter } from "next/router";
+import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
+
+interface Profile {
+  user_id: string;
+  full_name: string;
+  profile_photo: string;
+  role: string;
+  about: string;
+}
+
+interface TeamMember {
+  id: string;
+  user_id: string;
+  role: string;
+  profile: Profile;
+}
+
+interface Vote {
+  id: string;
+  team_member_id: string;
+  role: string;
+  voter_id: string;
+}
+
+interface TeamCouncil {
+  id: string;
+  name: string;
+  slogan: string | null;
+  president_id: string;
+  members: TeamMember[];
+  votes: Vote[];
+}
 
 export default function SSCVoting() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [myTeam, setMyTeam] = useState<any>(null);
+  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [teams, setTeams] = useState<TeamCouncil[]>([]);
+  const [myTeam, setMyTeam] = useState<TeamCouncil | null>(null);
   const [teamName, setTeamName] = useState("");
   const [slogan, setSlogan] = useState("");
   const [creatingTeam, setCreatingTeam] = useState(false);
@@ -24,34 +56,29 @@ export default function SSCVoting() {
       }
       setUser(session.user);
 
-      // Get profile
       const { data: prof } = await supabase
         .from("profiles")
         .select("*")
         .eq("user_id", session.user.id)
         .single();
-      setProfile(prof);
+      if (prof) setProfile(prof as Profile);
 
-      // Check if user is president and already made a team
-      const { data: myTeams } = await supabase
+      const { data: myTeamData } = await supabase
         .from("team_councils")
-        .select("*")
+        .select("*, members:team_members(*, profile:profiles(*)), votes:votes(*)")
         .eq("president_id", session.user.id)
         .maybeSingle();
-      setMyTeam(myTeams);
+      if (myTeamData) setMyTeam(myTeamData as TeamCouncil);
 
-      // Get all teams and their members
-      const { data: allTeams, error } = await supabase
+      const { data: allTeams } = await supabase
         .from("team_councils")
         .select("*, members:team_members(*, profile:profiles(*)), votes:votes(*)");
-
-      setTeams(allTeams || []);
+      if (allTeams) setTeams(allTeams as TeamCouncil[]);
     }
     getData();
-  }, []);
+  }, [router]);
 
-  // Team creation (President)
-  async function handleCreateTeam(e: any) {
+  async function handleCreateTeam(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     if (!teamName.trim()) {
@@ -59,23 +86,25 @@ export default function SSCVoting() {
       return;
     }
     setCreatingTeam(true);
-    const { error } = await supabase.from("team_councils").insert({
+    const { error: teamError } = await supabase.from("team_councils").insert({
       name: teamName,
       slogan: slogan.trim() || null,
-      president_id: user.id,
+      president_id: user?.id,
     });
-    if (error) setError(error.message);
+    if (teamError) {
+      setError(teamError.message);
+      setCreatingTeam(false);
+      return;
+    }
     setCreatingTeam(false);
     router.reload();
   }
 
-  // Voting logic
   async function handleVote(memberId: string, role: string) {
-    // Prevent double voting for same role
     const { data: alreadyVoted } = await supabase
       .from("votes")
       .select("*")
-      .eq("voter_id", user.id)
+      .eq("voter_id", user?.id)
       .eq("role", role)
       .single();
     if (alreadyVoted) {
@@ -83,16 +112,14 @@ export default function SSCVoting() {
       setVoteState((s) => ({ ...s, [memberId + role]: true }));
       return;
     }
-    // Modal confirmation
     setModal({ show: true, memberId, role });
   }
 
   async function confirmVote(memberId: string, role: string) {
-    // Double-check in backend (atomic)
     const { data: alreadyVoted } = await supabase
       .from("votes")
       .select("*")
-      .eq("voter_id", user.id)
+      .eq("voter_id", user?.id)
       .eq("role", role)
       .single();
     if (alreadyVoted) {
@@ -101,11 +128,10 @@ export default function SSCVoting() {
       setModal(null);
       return;
     }
-
     await supabase.from("votes").insert({
       team_member_id: memberId,
       role,
-      voter_id: user.id,
+      voter_id: user?.id,
     });
     setVoteState((s) => ({ ...s, [memberId + role]: true }));
     setModal(null);
@@ -114,7 +140,6 @@ export default function SSCVoting() {
 
   return (
     <div className="max-w-4xl mx-auto p-8">
-      {/* Top bar */}
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-2xl font-bold">SSC Voting</h1>
@@ -122,10 +147,12 @@ export default function SSCVoting() {
         <div className="flex items-center gap-2">
           {profile && (
             <>
-              <img
+              <Image
                 src={profile.profile_photo}
                 alt="Profile"
-                className="rounded-full border-4 border-red-700 w-12 h-12 object-cover"
+                className="rounded-full border-4 border-red-700 object-cover"
+                width={48}
+                height={48}
               />
               <span className="font-semibold">{profile.full_name}</span>
             </>
@@ -163,20 +190,17 @@ export default function SSCVoting() {
 
       {error && <div className="text-red-600 mb-2">{error}</div>}
 
-      {/* Team Council Cards */}
       <div className="space-y-6">
         {teams.map((team) => (
           <TeamCouncilCard
             key={team.id}
             team={team}
-            userId={user?.id}
             voteState={voteState}
             onVote={handleVote}
           />
         ))}
       </div>
 
-      {/* Modal */}
       {modal?.show && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded max-w-md text-center">
@@ -200,9 +224,17 @@ export default function SSCVoting() {
   );
 }
 
-function TeamCouncilCard({ team, userId, voteState, onVote }: any) {
+function TeamCouncilCard({
+  team,
+  voteState,
+  onVote,
+}: {
+  team: TeamCouncil;
+  voteState: { [key: string]: boolean };
+  onVote: (memberId: string, role: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
-  const totalVotes = team.votes?.length || 0;
+  const totalVotes = team.votes ? team.votes.length : 0;
 
   return (
     <div className="border rounded-lg shadow p-4">
@@ -215,30 +247,35 @@ function TeamCouncilCard({ team, userId, voteState, onVote }: any) {
       </div>
       <div className="mb-2">
         <span className="italic">
-          Slogan: {team.slogan || <span className="text-gray-400">N/A</span>}
+          Slogan: {team.slogan ? team.slogan : <span className="text-gray-400">N/A</span>}
         </span>
       </div>
       <button
         className="text-blue-600 underline"
-        onClick={() => setExpanded(e => !e)}
+        onClick={() => setExpanded((e) => !e)}
       >
         {expanded ? "Hide Members" : "Show Members"}
       </button>
       {expanded && (
         <div className="mt-4 space-y-2">
-          {team.members.map((member: any) => (
+          {team.members.map((member) => (
             <div
               key={member.id}
               className="flex items-center border-b py-2 last:border-b-0"
             >
               <span className="font-bold mr-2">{member.profile.full_name}</span>
-              <img
+              <Image
                 src={member.profile.profile_photo}
                 className="rounded-full w-8 h-8 border-2 border-red-700 mx-2"
                 alt={member.profile.full_name}
+                width={32}
+                height={32}
               />
               <span className="text-sm mr-2">{member.role}</span>
-              <span className="mr-2">({(team.votes || []).filter((v: any) => v.team_member_id === member.id).length} votes)</span>
+              <span className="mr-2">
+                (
+                {(team.votes || []).filter((v) => v.team_member_id === member.id).length} votes)
+              </span>
               <button
                 className={`ml-auto py-1 px-3 rounded ${
                   voteState[member.id + member.role]
@@ -250,7 +287,6 @@ function TeamCouncilCard({ team, userId, voteState, onVote }: any) {
               >
                 {voteState[member.id + member.role] ? "Voted" : "Vote"}
               </button>
-              {/* Arrow & Description */}
               {member.profile.about && (
                 <div className="ml-2">
                   <details>
