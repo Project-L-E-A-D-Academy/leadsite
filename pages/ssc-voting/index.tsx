@@ -1,4 +1,4 @@
-import { useState, useEffect, FormEvent } from "react";
+import { useState, useEffect, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/router";
 import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
@@ -34,9 +34,14 @@ interface TeamCouncil {
   votes: Vote[];
 }
 
+interface SupabaseUser {
+  id: string;
+  [key: string]: unknown;
+}
+
 export default function SSCVoting() {
   const router = useRouter();
-  const [user, setUser] = useState<{ id: string } | null>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [teams, setTeams] = useState<TeamCouncil[]>([]);
   const [myTeam, setMyTeam] = useState<TeamCouncil | null>(null);
@@ -54,7 +59,7 @@ export default function SSCVoting() {
         router.push("/login");
         return;
       }
-      setUser(session.user);
+      setUser(session.user as SupabaseUser);
 
       const { data: prof } = await supabase
         .from("profiles")
@@ -168,7 +173,7 @@ export default function SSCVoting() {
             placeholder="Team Council Name"
             className="border p-2 mb-2 w-full"
             value={teamName}
-            onChange={e => setTeamName(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setTeamName(e.target.value)}
             required
           />
           <input
@@ -176,7 +181,7 @@ export default function SSCVoting() {
             placeholder="Slogan (optional)"
             className="border p-2 mb-2 w-full"
             value={slogan}
-            onChange={e => setSlogan(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setSlogan(e.target.value)}
           />
           <button
             className="bg-red-700 text-white py-2 px-4 rounded hover:bg-red-800"
