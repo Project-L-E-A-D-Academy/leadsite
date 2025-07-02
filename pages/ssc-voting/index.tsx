@@ -2,6 +2,7 @@ import { useState, useEffect, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/router";
 import Image from "next/image";
 import { supabase } from "@/utils/supabaseClient";
+import type { User } from "@supabase/supabase-js";
 
 interface Profile {
   user_id: string;
@@ -34,14 +35,9 @@ interface TeamCouncil {
   votes: Vote[];
 }
 
-interface SupabaseUser {
-  id: string;
-  [key: string]: unknown;
-}
-
 export default function SSCVoting() {
   const router = useRouter();
-  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [teams, setTeams] = useState<TeamCouncil[]>([]);
   const [myTeam, setMyTeam] = useState<TeamCouncil | null>(null);
@@ -59,7 +55,7 @@ export default function SSCVoting() {
         router.push("/login");
         return;
       }
-      setUser(session.user as SupabaseUser);
+      setUser(session.user);
 
       const { data: prof } = await supabase
         .from("profiles")
