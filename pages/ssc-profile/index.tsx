@@ -7,14 +7,6 @@ interface SupabaseUser {
   [key: string]: unknown;
 }
 
-interface Profile {
-  user_id: string;
-  full_name: string;
-  profile_photo: string;
-  role: string;
-  about: string;
-}
-
 export default function SSCProfile() {
   const router = useRouter();
   const [user, setUser] = useState<SupabaseUser | null>(null);
