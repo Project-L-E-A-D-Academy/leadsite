@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/router";
 import { supabase } from "@/utils/supabaseClient"; // adjust path as needed
 
 export default function SSCProfile() {
   const router = useRouter();
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Fields
@@ -25,25 +25,25 @@ export default function SSCProfile() {
       setUser(session.user);
 
       // Check existing profile
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
         .select("*")
         .eq("user_id", session.user.id)
         .single();
       if (profile) {
-        // Already registered, route to voting
         router.push("/ssc-voting");
       }
       setLoading(false);
     }
     getSession();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]);
 
   // Handle photo upload
   async function uploadPhoto(file: File) {
     const fileExt = file.name.split(".").pop();
     const filePath = `${user.id}/profile.${fileExt}`;
-    let { error } = await supabase.storage
+    const { error } = await supabase.storage
       .from("profile-photos")
       .upload(filePath, file, { upsert: true });
     if (error) throw error;
@@ -54,7 +54,7 @@ export default function SSCProfile() {
   const validateFullName = (name: string) =>
     name.trim().split(" ").length >= 2 && !/[^a-zA-Z\s\-]/.test(name);
 
-  async function handleSubmit(e: any) {
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
     if (!validateFullName(fullName)) {
@@ -70,7 +70,7 @@ export default function SSCProfile() {
       return;
     }
     if (!about) {
-      setError("The 'About you as a " + role + "' field is required.");
+      setError(`The 'About you as a ${role}' field is required.`);
       return;
     }
 
@@ -79,7 +79,7 @@ export default function SSCProfile() {
     let photoUrl = "";
     try {
       photoUrl = await uploadPhoto(profilePhoto);
-    } catch (err) {
+    } catch (uploadError) {
       setError("Photo upload failed.");
       setLoading(false);
       return;
@@ -121,7 +121,7 @@ export default function SSCProfile() {
           type="file"
           accept="image/*"
           className="mb-4"
-          onChange={e => setProfilePhoto(e.target.files?.[0] || null)}
+          onChange={e => setProfilePhoto((e as ChangeEvent<HTMLInputElement>).target.files?.[0] || null)}
           required
         />
 
@@ -137,7 +137,6 @@ export default function SSCProfile() {
           <option value="vice-president">Vice President</option>
           <option value="secretary">Secretary</option>
           <option value="treasurer">Treasurer</option>
-          {/* Add other roles as needed */}
         </select>
 
         <label className="block mb-2">
