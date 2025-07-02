@@ -1,52 +1,59 @@
 import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/router";
-import { supabase } from "@/utils/supabaseClient"; // adjust path as needed
+import { supabase } from "@/utils/supabaseClient";
+
+interface SupabaseUser {
+  id: string;
+  [key: string]: unknown;
+}
+
+interface Profile {
+  user_id: string;
+  full_name: string;
+  profile_photo: string;
+  role: string;
+  about: string;
+}
 
 export default function SSCProfile() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SupabaseUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fields
   const [fullName, setFullName] = useState("");
   const [profilePhoto, setProfilePhoto] = useState<File | null>(null);
   const [role, setRole] = useState("");
   const [about, setAbout] = useState("");
   const [error, setError] = useState("");
 
-  // Check session and profile
   useEffect(() => {
     async function getSession() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        router.push("/login"); // redirect if not logged in
+        router.push("/login");
         return;
       }
-      setUser(session.user);
-
-      // Check existing profile
-      const { data: profile } = await supabase
+      setUser(session.user as SupabaseUser);
+      const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
         .eq("user_id", session.user.id)
         .single();
-      if (profile) {
+      if (profileData) {
         router.push("/ssc-voting");
       }
       setLoading(false);
     }
     getSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  // Handle photo upload
   async function uploadPhoto(file: File) {
     const fileExt = file.name.split(".").pop();
-    const filePath = `${user.id}/profile.${fileExt}`;
-    const { error } = await supabase.storage
+    const filePath = `${user?.id}/profile.${fileExt}`;
+    const { error: photoError } = await supabase.storage
       .from("profile-photos")
       .upload(filePath, file, { upsert: true });
-    if (error) throw error;
+    if (photoError) throw new Error(photoError.message);
     const { data } = supabase.storage.from("profile-photos").getPublicUrl(filePath);
     return data.publicUrl;
   }
@@ -73,20 +80,19 @@ export default function SSCProfile() {
       setError(`The 'About you as a ${role}' field is required.`);
       return;
     }
-
     setLoading(true);
 
     let photoUrl = "";
     try {
       photoUrl = await uploadPhoto(profilePhoto);
-    } catch (uploadError) {
+    } catch {
       setError("Photo upload failed.");
       setLoading(false);
       return;
     }
 
     const { error: upsertError } = await supabase.from("profiles").upsert({
-      user_id: user.id,
+      user_id: user?.id,
       full_name: fullName,
       profile_photo: photoUrl,
       role,
@@ -112,7 +118,7 @@ export default function SSCProfile() {
           type="text"
           className="border p-2 w-full mb-4"
           value={fullName}
-          onChange={e => setFullName(e.target.value)}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setFullName(e.target.value)}
           required
         />
 
@@ -121,7 +127,9 @@ export default function SSCProfile() {
           type="file"
           accept="image/*"
           className="mb-4"
-          onChange={e => setProfilePhoto((e as ChangeEvent<HTMLInputElement>).target.files?.[0] || null)}
+          onChange={(e: ChangeEvent<HTMLInputElement>) =>
+            setProfilePhoto(e.target.files?.[0] ?? null)
+          }
           required
         />
 
@@ -129,7 +137,7 @@ export default function SSCProfile() {
         <select
           className="border p-2 w-full mb-4"
           value={role}
-          onChange={e => setRole(e.target.value)}
+          onChange={(e: ChangeEvent<HTMLSelectElement>) => setRole(e.target.value)}
           required
         >
           <option value="">Select role</option>
@@ -145,7 +153,7 @@ export default function SSCProfile() {
         <textarea
           className="border p-2 w-full mb-4"
           value={about}
-          onChange={e => setAbout(e.target.value)}
+          onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setAbout(e.target.value)}
           required
         />
 
