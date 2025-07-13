@@ -1,25 +1,40 @@
 import { useProgress } from "./ProgressContext";
 
 export default function ProgressTracker() {
-  const { meditation, breathing, sleep, streak, longestStreak, badges } = useProgress();
+  const { 
+    breathingStreak, 
+    meditationMonkBadge, 
+    therapyBadge,
+    breathingBadge,
+    unlockedLevels
+  } = useProgress();
+
+  // Map context values to display data
+  const badges = [
+    ...(breathingBadge ? ['Breathing Master'] : []),
+    ...(meditationMonkBadge ? ['Meditation Monk'] : []),
+    ...(therapyBadge ? ['Therapy Pro'] : [])
+  ];
 
   return (
     <div className="w-full bg-white rounded-2xl shadow-lg p-6 mb-6">
       <div className="flex flex-col md:flex-row md:justify-between items-center gap-4">
         <div className="flex-1 text-center">
-          <div className="text-3xl font-bold text-blue-600">{meditation}</div>
-          <div className="text-gray-700 text-sm">Meditations</div>
+          <div className="text-3xl font-bold text-blue-600">{unlockedLevels.length}</div>
+          <div className="text-gray-700 text-sm">Unlocked Levels</div>
         </div>
         <div className="flex-1 text-center">
-          <div className="text-3xl font-bold text-green-600">{breathing}</div>
-          <div className="text-gray-700 text-sm">Breathing Sessions</div>
+          <div className="text-3xl font-bold text-green-600">{breathingStreak}</div>
+          <div className="text-gray-700 text-sm">Breathing Streak</div>
         </div>
         <div className="flex-1 text-center">
-          <div className="text-3xl font-bold text-purple-600">{sleep}</div>
-          <div className="text-gray-700 text-sm">Sleep Stories</div>
+          <div className="text-3xl font-bold text-purple-600">
+            {meditationMonkBadge ? '✅' : '❌'}
+          </div>
+          <div className="text-gray-700 text-sm">Meditation Badge</div>
         </div>
         <div className="flex-1 text-center">
-          <div className="text-3xl font-bold text-yellow-600">{streak}</div>
+          <div className="text-3xl font-bold text-yellow-600">{breathingStreak}</div>
           <div className="text-gray-700 text-sm">Current Streak</div>
         </div>
       </div>
@@ -33,7 +48,8 @@ export default function ProgressTracker() {
         )}
       </div>
       <div className="mt-2 text-center text-xs text-gray-500">
-        Longest streak: {longestStreak} days
+        {/* Using breathingStreak for both current and longest streak since you don't have separate values */}
+        Longest streak: {breathingStreak} days
       </div>
     </div>
   );
